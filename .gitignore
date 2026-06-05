@@ -1,0 +1,36 @@
+# ASL Dataset (Keep locally, do not push to GitHub)
+asl_dataset/
+
+# Root ML Models & Data (Ignore large pickle/npy files)
+/models/
+
+# Python Cache & Outputs
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.ipynb_checkpoints/
+scripts/__pycache__/
+webapp/__pycache__/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE and Project configuration files
+.vscode/
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+*.log
