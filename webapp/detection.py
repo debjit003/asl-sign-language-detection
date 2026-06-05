@@ -15,6 +15,7 @@ from pathlib import Path
 
 import cv2
 import mediapipe as mp
+import mediapipe.python.solutions.hands as mp_hands
 import numpy as np
 import onnxruntime as ort
 
@@ -257,7 +258,7 @@ class DetectionEngine:
             self.labels = json.load(f)["classes"]
 
         # MediaPipe
-        self.mp_hands = mp.solutions.hands.Hands(
+        self.mp_hands = mp_hands.Hands(
             static_image_mode=False,
             max_num_hands=1,
             min_detection_confidence=0.5,
@@ -404,7 +405,7 @@ class DetectionEngine:
         sample_interval = max(1, int(fps / 5))
 
         # Use a fresh MediaPipe instance in static mode for video
-        mp_static = mp.solutions.hands.Hands(
+        mp_static = mp_hands.Hands(
             static_image_mode=True,
             max_num_hands=1,
             min_detection_confidence=0.3,
