@@ -15,7 +15,10 @@ from pathlib import Path
 
 import cv2
 import mediapipe as mp
-import mediapipe.python.solutions.hands as mp_hands
+try:
+    mp_hands = mp.solutions.hands
+except AttributeError:
+    import mediapipe.solutions.hands as mp_hands
 import numpy as np
 import onnxruntime as ort
 
