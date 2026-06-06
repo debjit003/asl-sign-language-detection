@@ -10,6 +10,7 @@ import base64
 import json
 import time
 import tempfile
+import traceback
 from collections import deque
 from pathlib import Path
 
@@ -240,6 +241,56 @@ class PredictionSmoother:
 class DetectionEngine:
     """Full pipeline: image → hand detection → features → classification."""
 
+    @staticmethod
+    def _disambiguate(letter, raw_landmarks, proba, labels):
+        """
+        Use hand geometry heuristics to resolve commonly confused pairs
+        when the model's top-2 probabilities are close.
+        """
+        if raw_landmarks is None or len(raw_landmarks) != 63:
+            return letter
+
+        coords = raw_landmarks.astype(np.float64).copy()
+        wrist = coords[0:3].copy()
+        for i in range(21):
+            coords[i*3:i*3+3] -= wrist
+        max_d = max(np.sqrt(np.sum(coords[i*3:i*3+3]**2)) for i in range(21))
+        if max_d > 0:
+            coords /= max_d
+
+        top2 = np.argsort(proba)[-2:][::-1]
+        top2_labels = set(labels[i].upper() for i in top2)
+        top2_gap = float(proba[top2[0]] - proba[top2[1]])
+
+        # ── 0 vs O disambiguation ──
+        if letter in ('0', 'O') and top2_labels & {'0', 'O'} and top2_gap < 0.25:
+            thumb_tip = _pt(coords, THUMB_TIP)
+            index_tip = _pt(coords, INDEX_TIP)
+            middle_tip = _pt(coords, MIDDLE_TIP)
+            ring_tip = _pt(coords, RING_TIP)
+            pinky_tip = _pt(coords, PINKY_TIP)
+
+            thumb_index_dist = _dist(thumb_tip, index_tip)
+            all_tips_center = (index_tip + middle_tip + ring_tip + pinky_tip) / 4.0
+            avg_cluster_dist = np.mean([_dist(t, all_tips_center) for t in [index_tip, middle_tip, ring_tip, pinky_tip]])
+
+            if thumb_index_dist < 0.15 and avg_cluster_dist > 0.08:
+                letter = '0'
+            elif avg_cluster_dist < 0.10:
+                letter = 'O'
+
+        # ── X vs Z disambiguation ──
+        if letter in ('X', 'Z') and top2_labels & {'X', 'Z'} and top2_gap < 0.25:
+            index_dip_angle = _angle(coords, INDEX_PIP, INDEX_DIP, INDEX_TIP)
+            index_pip_angle = _angle(coords, INDEX_MCP, INDEX_PIP, INDEX_DIP)
+
+            if index_dip_angle < 1.8 and index_pip_angle < 2.0:
+                letter = 'X'
+            else:
+                letter = 'Z'
+
+        return letter
+
     def __init__(self, models_dir=None):
         if models_dir is None:
             models_dir = Path(__file__).resolve().parent / "models"
@@ -355,6 +406,10 @@ class DetectionEngine:
         smooth_conf_pct = smooth_conf * 100
         letter = self.labels[smooth_idx].upper() if (smooth_idx is not None and smooth_conf_pct >= self.CONFIDENCE_THRESHOLD) else ""
 
+        # Apply disambiguation for confused pairs
+        if letter:
+            letter = self._disambiguate(letter, raw, proba, np.array(self.labels))
+
         # Hold-to-lock (only if confidence passes threshold)
         hold_progress = 0.0
         locked = False
@@ -448,6 +503,9 @@ class DetectionEngine:
                         letter = self.labels[pred_idx].upper()
                         conf = float(proba[pred_idx]) * 100
 
+                        # Apply disambiguation for confused pairs
+                        letter = self._disambiguate(letter, raw, proba, np.array(self.labels))
+
                         # Confidence gate for video too
                         if conf < self.CONFIDENCE_THRESHOLD:
                             prev_letter = None
@@ -476,7 +534,10 @@ class DetectionEngine:
             frame_idx += 1
 
         cap.release()
-        mp_static.close()
+        try:
+            mp_static.close()
+        except Exception:
+            pass  # Ignore close errors on some mediapipe versions
 
         return {
             "duration": round(duration, 2),

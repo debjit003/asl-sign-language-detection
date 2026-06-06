@@ -59,18 +59,32 @@ def upload_video():
     # Save to temp file
     ext = os.path.splitext(video.filename)[1] or ".mp4"
     tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
-    video.save(tmp.name)
-    tmp.close()
+    try:
+        video.save(tmp.name)
+        tmp.close()
+        print(f"[Video Upload] Saved temp file: {tmp.name} ({os.path.getsize(tmp.name)} bytes)")
+    except Exception as e:
+        print(f"[Video Upload] Error saving file: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Failed to save video: {str(e)}"}), 500
 
     try:
         engine = DetectionEngine()
         result = engine.process_video(tmp.name)
         engine.close()
+        print(f"[Video Upload] Processing complete: {result.get('transcription', '')}")
         return jsonify(result)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"[Video Upload] Processing error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Video processing failed: {str(e)}"}), 500
     finally:
-        os.unlink(tmp.name)
+        try:
+            os.unlink(tmp.name)
+        except Exception:
+            pass
 
 
 # ── WebSocket Events ────────────────────────────────────────────────────────

@@ -388,18 +388,37 @@ async function handleVideoFile(file) {
         $('#uploadProgressBar').style.width = '100%';
         $('#uploadPercent').textContent = '100%';
 
+
         if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || 'Upload failed');
+            let errorMsg = 'Upload failed';
+            try {
+                const err = await response.json();
+                errorMsg = err.error || errorMsg;
+            } catch (parseErr) {
+                errorMsg = `Server error (${response.status}): ${response.statusText}`;
+            }
+            throw new Error(errorMsg);
         }
 
         const result = await response.json();
+
+        if (result.error) {
+            throw new Error(result.error);
+        }
+
         $('#uploadStatus').textContent = 'Processing complete!';
         displayTranscription(result);
 
     } catch (err) {
+        console.error('[Video Upload] Error:', err);
         $('#uploadStatus').textContent = 'Error: ' + err.message;
         $('#uploadProgressBar').style.background = 'var(--red)';
+        // Allow re-upload
+        setTimeout(() => {
+            uploadZone.style.display = 'flex';
+            $('#uploadProgress').style.display = 'none';
+            $('#uploadProgressBar').style.background = '';
+        }, 3000);
     }
 }
 
