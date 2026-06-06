@@ -258,33 +258,33 @@ class DetectionEngine:
         if max_d > 0:
             coords /= max_d
 
-        top2 = np.argsort(proba)[-2:][::-1]
-        top2_labels = set(labels[i].upper() for i in top2)
-        top2_gap = float(proba[top2[0]] - proba[top2[1]])
-
         # ── 0 vs O disambiguation ──
-        if letter in ('0', 'O') and top2_labels & {'0', 'O'} and top2_gap < 0.25:
+        # Threshold: if sum of thumb-to-pinky and thumb-to-ring distances > 0.58, it is '0' (flatter/extended fingers), else 'O' (tight circle)
+        if letter in ('0', 'O'):
             thumb_tip = _pt(coords, THUMB_TIP)
-            index_tip = _pt(coords, INDEX_TIP)
-            middle_tip = _pt(coords, MIDDLE_TIP)
             ring_tip = _pt(coords, RING_TIP)
             pinky_tip = _pt(coords, PINKY_TIP)
 
-            thumb_index_dist = _dist(thumb_tip, index_tip)
-            all_tips_center = (index_tip + middle_tip + ring_tip + pinky_tip) / 4.0
-            avg_cluster_dist = np.mean([_dist(t, all_tips_center) for t in [index_tip, middle_tip, ring_tip, pinky_tip]])
-
-            if thumb_index_dist < 0.15 and avg_cluster_dist > 0.08:
+            dist_sum = _dist(thumb_tip, pinky_tip) + _dist(thumb_tip, ring_tip)
+            if dist_sum > 0.58:
                 letter = '0'
-            elif avg_cluster_dist < 0.10:
+            else:
                 letter = 'O'
 
         # ── X vs Z disambiguation ──
-        if letter in ('X', 'Z') and top2_labels & {'X', 'Z'} and top2_gap < 0.25:
+        # Threshold: X has a bent index finger (extended ratio < 0.90 or joints bent < 2.7 rad), Z has a straight index finger
+        if letter in ('X', 'Z'):
             index_dip_angle = _angle(coords, INDEX_PIP, INDEX_DIP, INDEX_TIP)
             index_pip_angle = _angle(coords, INDEX_MCP, INDEX_PIP, INDEX_DIP)
 
-            if index_dip_angle < 1.8 and index_pip_angle < 2.0:
+            # Calculate index extended ratio (direct distance / bone path)
+            direct = _dist(_pt(coords, INDEX_TIP), _pt(coords, INDEX_MCP))
+            bone = (_dist(_pt(coords, INDEX_MCP), _pt(coords, INDEX_PIP)) +
+                    _dist(_pt(coords, INDEX_PIP), _pt(coords, INDEX_DIP)) +
+                    _dist(_pt(coords, INDEX_DIP), _pt(coords, INDEX_TIP)))
+            index_extended_ratio = direct / (bone + 1e-8)
+
+            if index_extended_ratio < 0.90 or index_pip_angle < 2.7 or index_dip_angle < 2.8:
                 letter = 'X'
             else:
                 letter = 'Z'
@@ -328,11 +328,12 @@ class DetectionEngine:
         self.letter_start_time = None
         self.last_locked_time = 0
         self.last_hand_time = time.time()
+        self.last_coords = None
 
         # Timing constants
         self.HOLD_TIME = 1.5       # seconds to hold for lock-in
         self.COOLDOWN_TIME = 0.5   # seconds after lock before next
-        self.CONFIDENCE_THRESHOLD = 75.0  # ignore predictions below this %
+        self.CONFIDENCE_THRESHOLD = 80.0  # ignore predictions below this %
 
         print(f"[DetectionEngine] Loaded: {self.n_features} features, "
               f"{len(self.labels)} classes")
@@ -365,6 +366,7 @@ class DetectionEngine:
             # No hand — reset tracking (no auto-space)
             self.current_letter = None
             self.letter_start_time = None
+            self.last_coords = None
             return {
                 "hand_detected": False,
                 "sentence": "".join(self.sentence),
@@ -373,6 +375,17 @@ class DetectionEngine:
         self.last_hand_time = now
         hand = result.multi_hand_landmarks[0]
         raw = np.array([[lm.x, lm.y, lm.z] for lm in hand.landmark]).flatten()
+
+        # Track hand landmark movement velocity to detect transition/instability
+        is_transitioning = False
+        if self.last_coords is not None:
+            curr_pts = raw.reshape(21, 3)
+            prev_pts = self.last_coords.reshape(21, 3)
+            shift = np.mean(np.sqrt(np.sum((curr_pts - prev_pts) ** 2, axis=1)))
+            # A shift greater than 0.04 indicates the hand is in rapid motion/transition
+            if shift > 0.04:
+                is_transitioning = True
+        self.last_coords = raw.copy()
 
         # Landmark positions for client-side drawing (normalized x,y)
         landmarks = [{"x": round(float(lm.x), 4), "y": round(float(lm.y), 4)}
@@ -409,6 +422,12 @@ class DetectionEngine:
         # Apply disambiguation for confused pairs
         if letter:
             letter = self._disambiguate(letter, raw, proba, np.array(self.labels))
+
+        # Reset hold/prediction if hand is in active transition (moving)
+        if is_transitioning:
+            letter = ""
+            self.current_letter = None
+            self.letter_start_time = None
 
         # Hold-to-lock (only if confidence passes threshold)
         hold_progress = 0.0
@@ -553,6 +572,7 @@ class DetectionEngine:
         self.current_letter = None
         self.letter_start_time = None
         self.smoother.reset()
+        self.last_coords = None
 
     def backspace(self):
         if self.sentence:

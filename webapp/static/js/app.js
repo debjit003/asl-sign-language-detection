@@ -339,6 +339,33 @@ fileInput.addEventListener('change', () => {
     if (fileInput.files.length > 0) handleVideoFile(fileInput.files[0]);
 });
 
+// Re-upload button click handler
+$('#reuploadBtn').addEventListener('click', resetUploadState);
+
+function resetUploadState() {
+    // 1. Pause and clear video preview player
+    const player = $('#previewPlayer');
+    player.pause();
+    if (player.src) {
+        URL.revokeObjectURL(player.src);
+        player.src = '';
+    }
+
+    // 2. Hide video preview and progress panel
+    $('#videoPreview').style.display = 'none';
+    $('#uploadProgress').style.display = 'none';
+
+    // 3. Reset and show drag & drop zone
+    uploadZone.style.display = 'flex';
+    $('#videoFileInput').value = '';
+
+    // 4. Reset transcription panel
+    $('#transcriptionResults').style.display = 'none';
+    $('#transcriptionEmpty').style.display = 'flex';
+    $('#downloadBtn').style.display = 'none';
+    window._lastTranscription = null;
+}
+
 async function handleVideoFile(file) {
     if (!file.type.startsWith('video/')) {
         alert('Please select a video file');
@@ -413,12 +440,11 @@ async function handleVideoFile(file) {
         console.error('[Video Upload] Error:', err);
         $('#uploadStatus').textContent = 'Error: ' + err.message;
         $('#uploadProgressBar').style.background = 'var(--red)';
-        // Allow re-upload
+        // Allow re-upload after 4 seconds
         setTimeout(() => {
-            uploadZone.style.display = 'flex';
-            $('#uploadProgress').style.display = 'none';
+            resetUploadState();
             $('#uploadProgressBar').style.background = '';
-        }, 3000);
+        }, 4000);
     }
 }
 

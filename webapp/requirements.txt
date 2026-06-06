@@ -2,7 +2,8 @@ flask>=3.0
 flask-socketio>=5.3
 flask-cors>=4.0
 simple-websocket>=1.0
-eventlet>=0.35
+gevent>=23.9.0
+gevent-websocket>=0.10.1
 mediapipe==0.10.14
 opencv-python-headless>=4.8
 onnxruntime>=1.16
