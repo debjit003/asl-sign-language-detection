@@ -11,7 +11,7 @@ This project is structured as a professional, end-to-end Machine Learning web ap
 * **Real-Time Webcam Detection**: Stream video directly from your browser, view real-time hand skeleton overlays, and get instant letters/numbers predictions.
 * **Video File Upload & Transcription**: Upload video clips (MP4, AVI, MOV) to transcribe sign language into English text, accompanied by a detailed detection timeline with timestamps.
 * **Prediction Smoothing & Noise Filtering**: Utilizes a probability-averaging sliding window filter to prevent prediction flickering and reject transitions.
-* **Strict Confidence Gating**: Ignores random hand movements or vague shapes using a 75% confidence threshold filter.
+* **Strict Confidence Gating**: Ignores random hand movements or vague shapes using a 72% confidence threshold filter.
 * **Sentence Builder**: Combine detected signs into words/sentences using manual space bar adjustments and backspacing commands.
 * **Modern UI/UX**: Professional dark glassmorphic interface built with vanilla HTML/CSS/JS.
 
@@ -71,10 +71,12 @@ sign_language_detection_project/
 ├── .gitignore                # Pushes only application code (ignores datasets/pickles)
 ├── README.md                 # Project Documentation
 ├── scripts/                  # Machine Learning pipeline scripts
-│   ├── extract_landmarks_v2.py # Preprocesses dataset & extracts 170-dim features
+│   ├── extract_landmarks.py  # Core 170-dim feature extraction logic
+│   ├── extract_landmarks_v2.py # Enhanced extraction with aggressive detection
 │   ├── train_model.py        # Compares and evaluates classification models
 │   ├── export_to_onnx.py     # Exports MLP + StandardScaler to ONNX
-│   └── analyze_confusion.py  # Diagnostic tool for dataset confusion
+│   ├── analyze_confusion.py  # Diagnostic tool for dataset confusion
+│   └── diagnose_webcam.py    # Live webcam diagnostic for ONNX model
 ├── webapp/                   # Flask Web Application
 │   ├── app.py                # Server entry point (WebSockets & APIs)
 │   ├── detection.py          # Real-time ONNX inference pipeline
@@ -116,3 +118,32 @@ sign_language_detection_project/
 4. Open your browser and navigate to **http://localhost:5000**.
 
 ---
+
+## 🚀 Cloud Deployment (Free)
+
+The application is pre-configured for free cloud hosting on **Render** (supporting WebSockets and Python environments):
+
+1. Push the repository to GitHub:
+   ```bash
+   git init
+   git add webapp/ render.yaml .gitignore README.md scripts/
+   git commit -m "ASL Sign Language Detection Web Application"
+   git remote add origin https://github.com/YOUR_USERNAME/asl-sign-language-detection.git
+   git branch -M main
+   git push -u origin main
+   ```
+2. Log into [Render](https://render.com/) and create a new **Blueprint** service.
+3. Connect your GitHub repository and approve the deployment.
+4. Render will read the `render.yaml` configuration to provision and start the application.
+
+---
+
+## 📄 License
+
+This project is submitted as part of an MSc dissertation. All rights reserved.
+
+---
+
+## 👤 Author
+
+Developed as an MSc Final Year Project.

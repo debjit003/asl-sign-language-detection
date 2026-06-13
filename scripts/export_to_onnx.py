@@ -4,7 +4,7 @@ Export the best trained model + scaler to ONNX format for Java inference.
 Converts the sklearn model to ONNX using skl2onnx, exports scaler parameters
 and label classes as JSON files, and verifies the export by running test inference.
 
-Output files go to: src/main/resources/models/
+Output files go to: webapp/models/
 
 Usage:
     python scripts/export_to_onnx.py

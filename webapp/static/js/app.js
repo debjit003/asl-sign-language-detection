@@ -38,7 +38,7 @@ function ensureOverlayCanvas() {
 
 // ── Socket.IO Connection ─────────────────────────────────────────────
 function initSocket() {
-    socket = io({ transports: ['websocket', 'polling'] });
+    socket = io();
 
     socket.on('connect', () => {
         updateConnectionStatus('connected', 'Connected');
@@ -95,7 +95,7 @@ async function startCamera() {
         ensureOverlayCanvas();
 
         // Send frames as fast as server can process (client-paced)
-        sendInterval = setInterval(captureAndSend, 80); // ~12 FPS max attempt
+        sendInterval = setInterval(captureAndSend, 60); // ~16 FPS max attempt (localhost)
         fpsTimestamp = Date.now();
         frameCount = 0;
     } catch (err) {
@@ -219,7 +219,8 @@ function updatePrediction(data) {
     const indicator = $('#handIndicator');
     if (data.hand_detected) {
         indicator.classList.add('detected');
-        $('#handStatusText').textContent = 'Hand detected';
+        const hasPred = data.smoothed_letter && data.smoothed_letter.length > 0;
+        $('#handStatusText').textContent = hasPred ? 'Hand detected' : 'No valid sign';
     } else {
         indicator.classList.remove('detected');
         $('#handStatusText').textContent = 'No hand detected';
@@ -237,6 +238,10 @@ function updatePrediction(data) {
             lastLetter = activeLetter;
         }
         charEl.textContent = activeLetter;
+    } else if (data.hand_detected) {
+        // Hand visible but no valid ASL sign recognised
+        charEl.textContent = '\u2014';
+        lastLetter = '';
     } else {
         charEl.textContent = '?';
         lastLetter = '';
@@ -372,6 +377,11 @@ async function handleVideoFile(file) {
         return;
     }
 
+    if (file.size > 50 * 1024 * 1024) {
+        alert('File is too large. Maximum size is 50 MB.');
+        return;
+    }
+
     // Show progress
     $('#uploadFileName').textContent = file.name;
     uploadZone.style.display = 'none';
@@ -388,9 +398,13 @@ async function handleVideoFile(file) {
     $('#previewPlayer').src = previewUrl;
     $('#videoPreview').style.display = 'block';
 
-    // Upload
+    // Upload with timeout
     const formData = new FormData();
     formData.append('video', file);
+
+    // AbortController for timeout (120s for localhost processing)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
 
     try {
         // Simulate progress since fetch doesn't support upload progress easily
@@ -409,8 +423,10 @@ async function handleVideoFile(file) {
         const response = await fetch('/api/upload-video', {
             method: 'POST',
             body: formData,
+            signal: controller.signal,
         });
 
+        clearTimeout(timeoutId);
         clearInterval(progressInterval);
         $('#uploadProgressBar').style.width = '100%';
         $('#uploadPercent').textContent = '100%';
@@ -437,8 +453,12 @@ async function handleVideoFile(file) {
         displayTranscription(result);
 
     } catch (err) {
+        clearTimeout(timeoutId);
         console.error('[Video Upload] Error:', err);
-        $('#uploadStatus').textContent = 'Error: ' + err.message;
+        const errorMsg = err.name === 'AbortError'
+            ? 'Processing timed out. Try a shorter video.'
+            : err.message;
+        $('#uploadStatus').textContent = 'Error: ' + errorMsg;
         $('#uploadProgressBar').style.background = 'var(--red)';
         // Allow re-upload after 4 seconds
         setTimeout(() => {

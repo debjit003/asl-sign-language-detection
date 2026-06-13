@@ -34,3 +34,18 @@ Thumbs.db
 desktop.ini
 *.tmp
 *.log
+
+# Thesis LaTeX build artifacts (keep .tex source tracked)
+thesis/*.aux
+thesis/*.log
+thesis/*.out
+thesis/*.toc
+thesis/*.lof
+thesis/*.lot
+thesis/*.fls
+thesis/*.fdb_latexmk
+thesis/*.synctex.gz
+thesis/*.pdf
+
+# Gemini AI assistant
+.gemini/

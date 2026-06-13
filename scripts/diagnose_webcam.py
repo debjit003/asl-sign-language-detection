@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from extract_landmarks import extract_features
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
-MODELS_DIR = PROJECT_DIR / "src" / "main" / "resources" / "models"
+MODELS_DIR = PROJECT_DIR / "webapp" / "models"
 
 
 def main():

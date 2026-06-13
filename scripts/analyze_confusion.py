@@ -13,7 +13,7 @@ from collections import Counter, defaultdict
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 DATASET_DIR = PROJECT_DIR / "asl_dataset"
-MODELS_DIR = PROJECT_DIR / "src" / "main" / "resources" / "models"
+MODELS_DIR = PROJECT_DIR / "webapp" / "models"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from extract_landmarks import extract_features

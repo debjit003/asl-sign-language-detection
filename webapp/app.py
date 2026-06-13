@@ -22,16 +22,16 @@ app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB max upload (Render 
 
 CORS(app)
 
-# Use gevent for production (Render), threading for local dev
-# gevent is the most reliable async mode for gunicorn + WebSocket
-async_mode = "gevent" if "gunicorn" in os.environ.get("SERVER_SOFTWARE", "") else "threading"
-
-# Fallback: detect if gevent is importable
+# Use threading for local dev (most reliable with flask-socketio).
+# gevent/eventlet only needed for production WSGI servers.
+async_mode = "threading"
 try:
+    # If running under gunicorn, use gevent
     import gevent  # noqa: F401
-    async_mode = "gevent"
+    if "gunicorn" in os.environ.get("SERVER_SOFTWARE", ""):
+        async_mode = "gevent"
 except ImportError:
-    async_mode = "threading"
+    pass
 
 print(f"[App] Using async_mode: {async_mode}")
 
@@ -62,12 +62,8 @@ def get_engine():
 
 def get_client_state(sid):
     if sid not in client_state:
-        client_state[sid] = {
-            "sentence": [],
-            "current_letter": None,
-            "letter_start_time": None,
-            "last_locked_time": 0,
-        }
+        engine = get_engine()
+        client_state[sid] = engine.create_client_state()
     return client_state[sid]
 
 
@@ -107,11 +103,13 @@ def upload_video():
         return jsonify({"error": f"Failed to save video: {str(e)}"}), 500
 
     try:
-        engine = DetectionEngine()
+        # Reuse the shared engine — avoids reloading MediaPipe + ONNX
+        # from disk on every request (was the main cause of video upload
+        # failures due to slow initialization)
+        engine = get_engine()
         start_time = time.time()
         result = engine.process_video(tmp.name)
         elapsed = time.time() - start_time
-        engine.close()
         print(f"[Video Upload] Done in {elapsed:.1f}s: '{result.get('transcription', '')}'")
         return jsonify(result)
     except Exception as e:
@@ -149,12 +147,8 @@ def on_frame(data):
     try:
         engine = get_engine()
         image_data = data.get("data", "")
-        result = engine.process_frame(image_data)
-
-        # Merge per-client sentence state
         state = get_client_state(sid)
-        result["sentence"] = "".join(state.get("sentence", []))
-
+        result = engine.process_frame(image_data, state=state)
         emit("prediction", result)
     except Exception as e:
         print(f"[WS] Frame error for {sid}: {e}")
@@ -163,23 +157,29 @@ def on_frame(data):
 
 @socketio.on("reset_sentence")
 def on_reset():
+    sid = request.sid
+    state = get_client_state(sid)
     engine = get_engine()
-    engine.reset_sentence()
+    engine.reset_client_state(state)
     emit("prediction", {"sentence": "", "hand_detected": False})
 
 
 @socketio.on("backspace")
 def on_backspace():
-    engine = get_engine()
-    engine.backspace()
-    emit("prediction", {"sentence": "".join(engine.sentence), "hand_detected": False})
+    sid = request.sid
+    state = get_client_state(sid)
+    if state["sentence"]:
+        state["sentence"].pop()
+    emit("prediction", {"sentence": "".join(state["sentence"]), "hand_detected": False})
 
 
 @socketio.on("add_space")
 def on_space():
-    engine = get_engine()
-    engine.add_space()
-    emit("prediction", {"sentence": "".join(engine.sentence), "hand_detected": False})
+    sid = request.sid
+    state = get_client_state(sid)
+    if not state["sentence"] or state["sentence"][-1] != " ":
+        state["sentence"].append(" ")
+    emit("prediction", {"sentence": "".join(state["sentence"]), "hand_detected": False})
 
 
 # ── Main ────────────────────────────────────────────────────────────────────
