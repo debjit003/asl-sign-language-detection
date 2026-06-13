@@ -117,26 +117,8 @@ sign_language_detection_project/
    ```
 4. Open your browser and navigate to **http://localhost:5000**.
 
----
 
-## 🚀 Cloud Deployment (Free)
 
-The application is pre-configured for free cloud hosting on **Render** (supporting WebSockets and Python environments):
-
-1. Push the repository to GitHub:
-   ```bash
-   git init
-   git add webapp/ render.yaml .gitignore README.md scripts/
-   git commit -m "ASL Sign Language Detection Web Application"
-   git remote add origin https://github.com/YOUR_USERNAME/asl-sign-language-detection.git
-   git branch -M main
-   git push -u origin main
-   ```
-2. Log into [Render](https://render.com/) and create a new **Blueprint** service.
-3. Connect your GitHub repository and approve the deployment.
-4. Render will read the `render.yaml` configuration to provision and start the application.
-
----
 
 ## 📄 License
 
